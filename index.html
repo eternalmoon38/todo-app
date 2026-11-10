@@ -104,6 +104,20 @@ main{flex:1;display:grid;grid-template-columns:minmax(330px,410px) 1fr;min-heigh
 .gok{font-size:12px;color:var(--p2);font-weight:500}
 .gwarn{font-size:12px;color:var(--p3);font-weight:500}
 .gline{width:100%;padding-left:38px;margin-top:-2px}
+.memo form{display:flex;gap:6px;margin-bottom:12px}
+.memo form input{flex:1;min-width:0;border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:#fff}
+.mlist{list-style:none;margin:0 0 10px;padding:0;display:flex;flex-direction:column;gap:5px}
+.mrow{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:7px 8px;box-shadow:var(--sh)}
+.mrow .mtext{flex:1;min-width:0;word-break:break-word;cursor:text;padding:2px 0}
+.mrow.done .mtext{text-decoration:line-through;color:var(--muted)}
+.mrow.done{opacity:.75;box-shadow:none}
+.mrow.done>.chk{background:var(--p2);border-color:var(--p2);color:#fff}
+.mrow .mini{height:28px;width:28px}
+.medit{flex:1;min-width:0;border:1px solid #B9AF9E;border-radius:6px;padding:4px 8px;background:#fff}
+.mhead{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);font-weight:700;margin:14px 2px 6px}
+.linkbtn{border:0;background:none;color:var(--muted);text-decoration:underline;font-size:12px;padding:0;margin-left:auto}
+.mnote{font-size:11.5px;color:var(--muted);margin:6px 2px}
+body.v-memo .adder,body.v-memo #filterSeg,body.v-memo #groupSel,body.v-memo .toolbar label{display:none!important}
 .stepsum{font-size:11.5px;color:var(--muted);margin-top:2px}
 .cbody{flex:1;min-width:0}
 .ctitle{font-weight:500;word-break:break-word}
@@ -301,7 +315,7 @@ body.resizing,body.resizing *{cursor:ns-resize!important}
       </form>
     </div>
     <div class="toolbar">
-      <div class="seg" id="viewSeg"><button data-v="list" class="on">リスト</button><button data-v="matrix">優先度マトリクス</button></div>
+      <div class="seg" id="viewSeg"><button data-v="list" class="on">リスト</button><button data-v="matrix">優先度マトリクス</button><button data-v="memo">TODOメモ</button></div>
       <div class="seg" id="filterSeg"><button data-f="all" class="on">すべて</button><button data-f="want">やりたい</button><button data-f="todo">やること</button></div>
       <select id="groupSel" aria-label="並べ方"><option value="cat">カテゴリ別</option><option value="pri">優先度順</option></select>
       <label><input type="checkbox" id="showDone"> 完了も表示</label>
@@ -346,7 +360,7 @@ const Q={
 };
 const WD=['日','月','火','水','木','金','土'];
 
-let state={v:1,items:[],cats:DEF_CATS.map(c=>({...c}))};
+let state={v:1,items:[],cats:DEF_CATS.map(c=>({...c})),memos:[]};
 const ui={view:'list',filter:'all',group:'cat',showDone:false,addKind:'want',anchor:today(),exp:{}};
 
 /* ---------- utils ---------- */
@@ -367,7 +381,8 @@ function durLabel(m){return m>=60?(m%60?Math.floor(m/60)+'時間'+m%60+'分':m/6
 function md(ds){const d=parse(ds);return (d.getMonth()+1)+'/'+d.getDate()+'('+WD[d.getDay()]+')'}
 
 function normalize(s){
-  const out={v:1,items:[],cats:[]};
+  const out={v:1,items:[],cats:[],memos:[]};
+  if(s&&Array.isArray(s.memos)) out.memos=s.memos.filter(m=>m&&m.id&&m.text).map(m=>({id:String(m.id),text:String(m.text),done:!!m.done,created:Number(m.created)||Date.now()}));
   if(s&&Array.isArray(s.cats)) out.cats=s.cats.filter(c=>c&&c.id).map(c=>({id:String(c.id),name:String(c.name||''),color:String(c.color||'#999')}));
   if(!out.cats.length) out.cats=DEF_CATS.map(c=>({...c}));
   if(s&&Array.isArray(s.items)) out.items=s.items.filter(i=>i&&i.id&&i.title).map(i=>({
@@ -488,8 +503,22 @@ function cardHTML(i,compact){
       ${prog}${steps}
     </div></div>`;
 }
+function renderMemo(){
+  const ms=state.memos,open=ms.filter(m=>!m.done),done=ms.filter(m=>m.done);
+  const row=m=>`<li class="mrow${m.done?' done':''}" data-mid="${m.id}"><button class="chk" data-act="mdone" aria-label="完了にする">✓</button>
+    <span class="mtext" data-act="medit">${esc(m.text)}</span>
+    <button class="mini" data-act="mtoboard" title="ボードの「やること」に移す" aria-label="ボードの「やること」に移す">→</button><button class="mini" data-act="mdel" aria-label="削除">×</button></li>`;
+  $('#leftBody').innerHTML=`<div class="memo">
+    <form id="memoForm" autocomplete="off"><input id="memoInput" placeholder="買うもの・ちょっとした用事を書いて Enter" aria-label="TODOを追加"><button class="btn primary" type="submit">追加</button></form>
+    ${ms.length?`<ul class="mlist">${open.map(row).join('')}</ul>
+      ${done.length?`<div class="mhead">完了 ${done.length}<button class="linkbtn" data-act="mclear">完了したものを消す</button></div><ul class="mlist">${done.map(row).join('')}</ul>`:''}
+      <p class="mnote">残り ${open.length}件　・文字をタップで編集　・「→」でボードの「やること」へ移動</p>`
+      :`<div class="hint-none">分類や優先度をつけるほどでもない用事を、さっと書いておく場所です。<br>改行で区切って貼り付けると、まとめて追加できます。</div>`}
+  </div>`;
+}
 function renderLeft(){
   const body=$('#leftBody');
+  if(ui.view==='memo'){renderMemo();return}
   if(!state.items.length){
     body.innerHTML=`<div class="empty"><h2>まずは全部書き出してみましょう</h2>
       <ol><li>上の欄に「やりたいこと」「やること」を思いつくまま追加</li>
@@ -759,6 +788,24 @@ document.addEventListener('click',e=>{
     return;
   }
   if(act&&act.dataset.act==='sample'){addSamples();return}
+  if(act&&/^m(done|del|clear|toboard|edit)$/.test(act.dataset.act)){
+    const a=act.dataset.act,li=act.closest('[data-mid]'),m=li&&state.memos.find(x=>x.id===li.dataset.mid);
+    if(a==='mclear'){const n=state.memos.filter(x=>x.done).length;state.memos=state.memos.filter(x=>!x.done);commit();toast(n+'件を消しました');return}
+    if(!m)return;
+    if(a==='mdone'){m.done=!m.done;commit();return}
+    if(a==='mdel'){state.memos=state.memos.filter(x=>x!==m);commit();return}
+    if(a==='mtoboard'){
+      state.items.push({id:uid(),title:m.text,kind:'todo',cat:'',imp:false,urg:false,dur:60,why:'',next:'',done:m.done,created:Date.now(),sched:null,steps:[],gcal:''});
+      state.memos=state.memos.filter(x=>x!==m);commit();toast('ボードの「やること」に移しました');return;
+    }
+    if(a==='medit'){
+      const inp=document.createElement('input');inp.className='medit';inp.value=m.text;act.replaceWith(inp);inp.focus();
+      let fin=false;const save=ok=>{if(fin)return;fin=true;const v=inp.value.trim();if(ok&&v&&v!==m.text){m.text=v;commit()}else renderLeft()};
+      inp.addEventListener('keydown',ev=>{if(ev.isComposing||ev.keyCode===229)return;if(ev.key==='Enter'){ev.preventDefault();save(true)}if(ev.key==='Escape'){ev.stopPropagation();save(false)}});
+      inp.addEventListener('blur',()=>save(true));
+      return;
+    }
+  }
   if(e.target.closest('input,.modal'))return;
   const el=e.target.closest('.card,.blk');
   if(el&&!e.target.closest('.modal'))openEdit(el.dataset.id);
@@ -778,7 +825,13 @@ function setMode(m){document.body.classList.remove('m-split','m-list','m-cal');d
 segBind('#mSeg','m',m=>{setMode(m);if(m!=='list')renderCal()});
 try{setMode(localStorage.getItem(KEY+'-mode')||'split')}catch(e){setMode('split')}
 segBind('#kindSeg','kind',v=>{ui.addKind=v;$('#addInput').focus()});
-segBind('#viewSeg','v',v=>{ui.view=v;$('#groupSel').style.display=v==='list'?'':'none';renderLeft()});
+segBind('#viewSeg','v',v=>{ui.view=v;$('#groupSel').style.display=v==='list'?'':'none';document.body.classList.toggle('v-memo',v==='memo');renderLeft();if(v==='memo'){const i=$('#memoInput');if(i&&window.innerWidth>700)i.focus()}});
+document.addEventListener('submit',e=>{
+  if(e.target.id!=='memoForm')return;e.preventDefault();
+  const inp=$('#memoInput'),ts=inp.value.split(/\n/).map(x=>x.trim()).filter(Boolean);if(!ts.length)return;
+  const now=Date.now();ts.forEach((t,k)=>state.memos.push({id:uid(),text:t,done:false,created:now+k}));
+  commit();const i2=$('#memoInput');if(i2)i2.focus();
+});
 segBind('#filterSeg','f',v=>{ui.filter=v;renderLeft()});
 $('#groupSel').addEventListener('change',e=>{ui.group=e.target.value;renderLeft()});
 $('#showDone').addEventListener('change',e=>{ui.showDone=e.target.checked;renderLeft()});
@@ -970,6 +1023,7 @@ function openHelp(){
     <p><b>3.5 ステップに分ける</b>　カードの「＋ ステップに分ける」から、小さな行動に分解します。「調べる → 決める → 予約する」のように → でつなぐと一度に追加できます。各ステップは単体でカレンダーにドラッグでき、全部チェックすると元の項目も完了になります。</p>
     <p>やりたいことの多くは <b>B（重要だけど緊急でない）</b> に入ります。ここを先にカレンダーへ確保するのがコツです。</p>
     <p><b>4. カレンダーへ</b>　カードを右のカレンダーにドラッグ（スマホは長押ししてから）。予定の下端をドラッグで時間を伸縮、左側に戻すと予定から外れます。</p>
+    <p><b>TODOメモ</b>　「TODOメモ」タブは、分類や優先度をつけない用事をさっと書いてチェックする場所です。「→」でボードの「やること」に移せます。</p>
     <p><b>5. Googleカレンダーへ</b>　予定の編集画面の「Googleカレンダーに追加」（ステップは「31」ボタン）を押すと、内容入力済みの登録画面が開きます。そこで「保存」を押せば登録完了です。あとで日時を変えた場合は、Googleカレンダー側も手動で直してください。</p>
     <div class="mfoot"><span style="flex:1"></span><button class="btn primary" id="helpClose">閉じる</button></div></div>`);
   $('#helpClose').onclick=closeModal;
