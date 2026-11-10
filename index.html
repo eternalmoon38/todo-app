@@ -96,6 +96,14 @@ main{flex:1;display:grid;grid-template-columns:minmax(330px,410px) 1fr;min-heigh
 .stepnew{display:flex;gap:6px}
 .stepnew .btn{white-space:nowrap;flex:none}
 .blk.short .bm{display:none}
+.gcalrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:2px 0 12px}
+.gbtn{display:inline-flex;align-items:center;gap:8px;text-decoration:none;color:var(--ink);font-weight:500}
+.gicon,.mini.g{display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#1A73E8;border:1.5px solid #1A73E8;border-radius:4px;background:#fff}
+.gicon{width:20px;height:20px}
+.mini.g{text-decoration:none;flex:none;width:30px;height:30px;font-size:11px}
+.gok{font-size:12px;color:var(--p2);font-weight:500}
+.gwarn{font-size:12px;color:var(--p3);font-weight:500}
+.gline{width:100%;padding-left:38px;margin-top:-2px}
 .stepsum{font-size:11.5px;color:var(--muted);margin-top:2px}
 .cbody{flex:1;min-width:0}
 .ctitle{font-weight:500;word-break:break-word}
@@ -260,6 +268,7 @@ body.resizing,body.resizing *{cursor:ns-resize!important}
   .row .f{min-width:30%}
   .radios span{white-space:nowrap;padding:7px 4px}
   .sedwhen{padding-left:0}
+  .gline{padding-left:0}
   .f .sedrow input[type=text]{flex-basis:100%;order:0}
   .sedrow .no{order:1}.f .sedrow input[type=checkbox]{order:2}.f .sedrow select{order:3;flex:1}
   .sedrow .mini{order:4}
@@ -364,14 +373,24 @@ function normalize(s){
   if(s&&Array.isArray(s.items)) out.items=s.items.filter(i=>i&&i.id&&i.title).map(i=>({
     id:String(i.id),title:String(i.title),kind:i.kind==='todo'?'todo':'want',cat:String(i.cat||''),
     imp:!!i.imp,urg:!!i.urg,dur:Math.max(15,Number(i.dur)||60),why:String(i.why||''),next:String(i.next||''),
-    done:!!i.done,created:Number(i.created)||Date.now(),sched:normSched(i.sched),
-    steps:Array.isArray(i.steps)?i.steps.filter(s=>s&&s.id&&s.title).map(s=>({id:String(s.id),title:String(s.title),done:!!s.done,dur:Math.max(15,Number(s.dur)||30),sched:normSched(s.sched)})):[]
+    done:!!i.done,created:Number(i.created)||Date.now(),sched:normSched(i.sched),gcal:String(i.gcal||''),
+    steps:Array.isArray(i.steps)?i.steps.filter(s=>s&&s.id&&s.title).map(s=>({id:String(s.id),title:String(s.title),done:!!s.done,dur:Math.max(15,Number(s.dur)||30),sched:normSched(s.sched),gcal:String(s.gcal||'')})):[]
   }));
   return out;
 }
 function normSched(s){return (s&&s.date&&isFinite(s.start))?{date:String(s.date),start:Number(s.start)}:null}
 function getRef(id,sid){const it=find(id);if(!it)return null;if(!sid)return it;return it.steps.find(s=>s.id===sid)||null}
 function splitSteps(v){return String(v).split(/\s*(?:→|->|⇒|\n)\s*/).map(s=>s.trim()).filter(Boolean)}
+function gKey(date,start,dur){return date+'|'+start+'|'+dur}
+function gcalUrl(title,date,start,dur,details){
+  const p2=n=>String(n).padStart(2,'0');
+  const s0=parse(date);s0.setMinutes(start);const e0=new Date(s0.getTime()+dur*60000);
+  const f=x=>x.getFullYear()+p2(x.getMonth()+1)+p2(x.getDate())+'T'+p2(x.getHours())+p2(x.getMinutes())+'00';
+  let tz='Asia/Tokyo';try{tz=Intl.DateTimeFormat().resolvedOptions().timeZone||tz}catch(e){}
+  const q=new URLSearchParams({action:'TEMPLATE',text:title,dates:f(s0)+'/'+f(e0),ctz:tz,details:details||''});
+  return 'https://calendar.google.com/calendar/render?'+q.toString();
+}
+function gState(flag,key){return !flag?'':flag===key?'<span class="gok">✓ 追加済み</span>':'<span class="gwarn">追加後に日時が変わりました</span>'}
 function newStep(t){return {id:uid(),title:t,done:false,dur:30,sched:null}}
 function isOpen(i){return ui.exp[i.id]!==undefined?ui.exp[i.id]:(i.steps.length>0&&!i.done)}
 
@@ -826,6 +845,7 @@ function openEdit(id){
       <label class="f"><span>日付</span><input type="date" name="date" value="${it.sched?it.sched.date:''}"></label>
       <label class="f"><span>開始</span><input type="time" name="time" step="900" value="${it.sched?hmPad(it.sched.start):''}"></label>
     </div>
+    <div class="gcalrow"><a class="btn gbtn" id="gItem" href="https://calendar.google.com/" target="_blank" rel="noopener"><span class="gicon">31</span>Googleカレンダーに追加</a><span id="gItemSt">${it.sched?gState(it.gcal,gKey(it.sched.date,it.sched.start,it.dur)):''}</span></div>
     <label class="tog" style="display:inline-flex"><input type="checkbox" name="done" ${it.done?'checked':''}>完了</label>
     <div class="mfoot"><button type="button" class="btn danger" id="btnDel">削除</button><span style="flex:1"></span>
       <button type="button" class="btn" id="btnCancel">キャンセル</button><button class="btn primary" type="submit">保存</button></div>
@@ -843,7 +863,8 @@ function openEdit(id){
       <input type="text" data-f="title" value="${esc(s.title)}">
       <select data-f="dur">${ds.map(d=>`<option value="${d}" ${d===s.dur?'selected':''}>${durLabel(d)}</option>`).join('')}</select>
       <button type="button" class="mini" data-m="up" aria-label="上へ" ${k===0?'disabled':''}>↑</button><button type="button" class="mini" data-m="down" aria-label="下へ" ${k===draft.length-1?'disabled':''}>↓</button><button type="button" class="mini" data-m="del" aria-label="削除">×</button>
-      <div class="sedwhen"><input type="date" data-f="date" value="${s.sched?s.sched.date:''}" aria-label="日付"><input type="time" data-f="time" step="900" value="${s.sched?hmPad(s.sched.start):''}" aria-label="開始時刻"></div></div>`}).join('');
+      <div class="sedwhen"><input type="date" data-f="date" value="${s.sched?s.sched.date:''}" aria-label="日付"><input type="time" data-f="time" step="900" value="${s.sched?hmPad(s.sched.start):''}" aria-label="開始時刻"><a class="mini g" data-g href="https://calendar.google.com/" target="_blank" rel="noopener" title="Googleカレンダーに追加" aria-label="Googleカレンダーに追加">31</a></div>
+      ${s.sched&&s.gcal?`<div class="gline">${gState(s.gcal,gKey(s.sched.date,s.sched.start,s.dur))}</div>`:''}</div>`}).join('');
     const tot=draft.reduce((a,s)=>a+s.dur,0),dn=draft.filter(s=>s.done).length;
     $('#stepSum').textContent=draft.length?`${draft.length}ステップ・合計 ${durLabel(tot)}・完了 ${dn}/${draft.length}　※ステップは左のカードから個別にカレンダーへドラッグできます`:'大きなタスクは、30分〜1時間で終わる単位に分けると動きやすくなります';
   };
@@ -861,6 +882,17 @@ function openEdit(id){
     if(fl!=='title')renderEd();
   });
   ed.addEventListener('click',e=>{
+    const g=e.target.closest('[data-g]');
+    if(g){
+      const s=draft[+g.closest('.sedrow').dataset.k];
+      if(!s.sched){e.preventDefault();toast('先にステップの日付を入れてください');return}
+      const title=(f.title.value.trim()||it.title)+'：'+(s.title||'ステップ');
+      const det=[f.why.value.trim()?'目的：'+f.why.value.trim():'','（やりたい・やることボードのステップ）'].filter(Boolean).join('\n');
+      g.href=gcalUrl(title,s.sched.date,s.sched.start,s.dur,det);
+      s.gcal=gKey(s.sched.date,s.sched.start,s.dur);
+      const real=it.steps.find(x=>x.id===s.id);if(real){real.gcal=s.gcal;saveLocal();scheduleRemote()}
+      setTimeout(renderEd,0);return;
+    }
     const b=e.target.closest('[data-m]');if(!b)return;const k=+b.closest('.sedrow').dataset.k;
     if(b.dataset.m==='del')draft.splice(k,1);
     else{const j=b.dataset.m==='up'?k-1:k+1;if(j<0||j>=draft.length)return;[draft[k],draft[j]]=[draft[j],draft[k]]}
@@ -874,6 +906,21 @@ function openEdit(id){
     else if(e.target.closest('#stepEd'))e.preventDefault();
   });
   renderEd();
+  $('#gItem').addEventListener('click',e=>{
+    const dv=f.date.value;
+    if(!dv){e.preventDefault();toast('先に日付と開始時刻を入れてください');return}
+    let st=9*60;if(f.time.value){const [h,m]=f.time.value.split(':').map(Number);st=h*60+m}
+    const dur=Number(f.dur.value),title=f.title.value.trim()||it.title;
+    const lines=[];
+    if(f.why.value.trim())lines.push('目的：'+f.why.value.trim());
+    if(f.next.value.trim())lines.push('最初の一歩：'+f.next.value.trim());
+    const ss=draft.filter(x=>x.title.trim());
+    if(ss.length)lines.push('ステップ：\n'+ss.map((x,k)=>(x.done?'☑ ':'☐ ')+(k+1)+'. '+x.title).join('\n'));
+    lines.push('（やりたい・やることボードから追加）');
+    e.currentTarget.href=gcalUrl(title,dv,st,dur,lines.join('\n\n'));
+    it.gcal=gKey(dv,st,dur);saveLocal();scheduleRemote();
+    $('#gItemSt').innerHTML=gState(it.gcal,it.gcal);
+  });
   $('#btnCancel').onclick=closeModal;
   const del=$('#btnDel');
   del.onclick=()=>{
@@ -923,6 +970,7 @@ function openHelp(){
     <p><b>3.5 ステップに分ける</b>　カードの「＋ ステップに分ける」から、小さな行動に分解します。「調べる → 決める → 予約する」のように → でつなぐと一度に追加できます。各ステップは単体でカレンダーにドラッグでき、全部チェックすると元の項目も完了になります。</p>
     <p>やりたいことの多くは <b>B（重要だけど緊急でない）</b> に入ります。ここを先にカレンダーへ確保するのがコツです。</p>
     <p><b>4. カレンダーへ</b>　カードを右のカレンダーにドラッグ（スマホは長押ししてから）。予定の下端をドラッグで時間を伸縮、左側に戻すと予定から外れます。</p>
+    <p><b>5. Googleカレンダーへ</b>　予定の編集画面の「Googleカレンダーに追加」（ステップは「31」ボタン）を押すと、内容入力済みの登録画面が開きます。そこで「保存」を押せば登録完了です。あとで日時を変えた場合は、Googleカレンダー側も手動で直してください。</p>
     <div class="mfoot"><span style="flex:1"></span><button class="btn primary" id="helpClose">閉じる</button></div></div>`);
   $('#helpClose').onclick=closeModal;
 }
