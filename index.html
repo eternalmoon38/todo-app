@@ -2,7 +2,12 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#FFFDF9">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="やりたいボード">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <title>やりたい・やることボード</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -201,15 +206,78 @@ body.resizing,body.resizing *{cursor:ns-resize!important}
   h1 small{display:none}
   .legend{display:none}
 }
+.mseg{display:none}
+.sedwhen{display:flex;gap:6px;width:100%;padding-left:38px}
+.f .sedwhen input{width:auto;flex:1;min-width:0;padding:5px 6px;font-size:12.5px}
+.sedrow{flex-wrap:wrap;padding-bottom:6px;border-bottom:1px dashed var(--line2)}
+
+/* ---- smartphone ---- */
+@media (max-width:700px){
+  body{padding-bottom:env(safe-area-inset-bottom)}
+  header{padding:8px 12px;padding-top:max(8px,env(safe-area-inset-top));gap:6px 8px;flex-wrap:nowrap}
+  h1{font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1}
+  .status{margin-left:0}
+  .status span{display:none}
+  header .btn{padding:5px 8px;font-size:12px;white-space:nowrap}
+  .mseg{display:flex;justify-content:center;padding:6px 10px;background:var(--panel);border-bottom:1px solid var(--line)}
+  .mseg .seg{width:100%}
+  .mseg .seg button{flex:1;padding:6px 4px}
+  main{grid-template-columns:1fr;grid-template-rows:minmax(0,48%) minmax(0,52%)}
+  body.m-list main,body.m-cal main{grid-template-rows:minmax(0,1fr)}
+  body.m-list #right{display:none}
+  body.m-cal #left{display:none}
+  /* inputs ≥16px so iOS does not zoom on focus */
+  input,select,textarea{font-size:16px!important}
+  .adder{padding:8px 10px}
+  .adder .seg{width:100%}
+  .adder .seg button{flex:1;padding:6px}
+  .adder form{margin-top:6px}
+  .adder input{padding:7px 9px}
+  .adder select{max-width:88px}
+  .toolbar{flex-wrap:nowrap;overflow-x:auto;padding:6px 10px;gap:6px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .toolbar::-webkit-scrollbar{display:none}
+  .toolbar>*{flex:none}
+  .toolbar label{margin-left:0;white-space:nowrap}
+  .seg button{padding:5px 9px;white-space:nowrap}
+  #leftBody{padding:10px 10px 60px}
+  .card{padding:9px 9px}
+  .chk{width:22px;height:22px;line-height:19px;font-size:12px}
+  .chk.sm{width:20px;height:20px;line-height:17px;font-size:10px}
+  .step{padding:6px 7px;font-size:13px}
+  .stepadd{padding:7px 9px}
+  .matrix{grid-template-columns:16px 1fr 1fr;gap:4px}
+  .quad{padding:6px 4px;min-height:120px}
+  .calbar{padding:6px 10px;gap:4px}
+  .calbar .btn{padding:5px 10px}
+  #rangeLabel{font-size:13px;margin-left:4px}
+  .dh{padding:4px 1px 5px;font-size:11px}
+  .dh b{font-size:15px}
+  .dh.today b{width:26px;height:26px;line-height:26px}
+  .blk{font-size:11.5px;padding:2px 5px}
+  .overlay{padding:0;align-items:flex-end}
+  .modal{width:100%;max-height:92dvh;border-radius:16px 16px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom))}
+  .row{gap:8px}
+  .row .f{min-width:30%}
+  .radios span{white-space:nowrap;padding:7px 4px}
+  .sedwhen{padding-left:0}
+  .f .sedrow input[type=text]{flex-basis:100%;order:0}
+  .sedrow .no{order:1}.f .sedrow input[type=checkbox]{order:2}.f .sedrow select{order:3;flex:1}
+  .sedrow .mini{order:4}
+  .sedwhen{order:6}
+  .mfoot{position:sticky;bottom:calc(-16px - env(safe-area-inset-bottom));background:var(--panel);margin:16px -16px calc(-16px - env(safe-area-inset-bottom));padding:12px 16px calc(12px + env(safe-area-inset-bottom))}
+  .toast{bottom:calc(20px + env(safe-area-inset-bottom))}
+  .ghost{font-size:14px}
+}
 </style>
 </head>
 <body>
 <header>
   <h1>やりたい・やることボード<small>書き出す → 分類する → 優先順位 → カレンダーへ</small></h1>
   <div class="status" id="status"><i></i><span>この端末に保存</span></div>
-  <button class="btn" id="btnCats">カテゴリ編集</button>
+  <button class="btn" id="btnCats">カテゴリ</button>
   <button class="btn" id="btnHelp">使い方</button>
 </header>
+<div class="mseg"><div class="seg" id="mSeg"><button data-m="split" class="on">リスト＋カレンダー</button><button data-m="list">リスト</button><button data-m="cal">カレンダー</button></div></div>
 <main>
   <section id="left">
     <div class="adder">
@@ -685,6 +753,11 @@ function segBind(sel,attr,fn){
     fn(b.dataset[attr]);
   });
 }
+function setMode(m){document.body.classList.remove('m-split','m-list','m-cal');document.body.classList.add('m-'+m);
+  document.querySelectorAll('#mSeg button').forEach(x=>x.classList.toggle('on',x.dataset.m===m));
+  try{localStorage.setItem(KEY+'-mode',m)}catch(e){}}
+segBind('#mSeg','m',m=>{setMode(m);if(m!=='list')renderCal()});
+try{setMode(localStorage.getItem(KEY+'-mode')||'split')}catch(e){setMode('split')}
 segBind('#kindSeg','kind',v=>{ui.addKind=v;$('#addInput').focus()});
 segBind('#viewSeg','v',v=>{ui.view=v;$('#groupSel').style.display=v==='list'?'':'none';renderLeft()});
 segBind('#filterSeg','f',v=>{ui.filter=v;renderLeft()});
@@ -769,14 +842,22 @@ function openEdit(id){
       return `<div class="sedrow" data-k="${k}"><span class="no">${k+1}</span><input type="checkbox" data-f="done" ${s.done?'checked':''} aria-label="完了">
       <input type="text" data-f="title" value="${esc(s.title)}">
       <select data-f="dur">${ds.map(d=>`<option value="${d}" ${d===s.dur?'selected':''}>${durLabel(d)}</option>`).join('')}</select>
-      ${s.sched?`<span class="sw">${md(s.sched.date)} ${hm(s.sched.start)}</span>`:''}
-      <button type="button" class="mini" data-m="up" aria-label="上へ" ${k===0?'disabled':''}>↑</button><button type="button" class="mini" data-m="down" aria-label="下へ" ${k===draft.length-1?'disabled':''}>↓</button><button type="button" class="mini" data-m="del" aria-label="削除">×</button></div>`}).join('');
+      <button type="button" class="mini" data-m="up" aria-label="上へ" ${k===0?'disabled':''}>↑</button><button type="button" class="mini" data-m="down" aria-label="下へ" ${k===draft.length-1?'disabled':''}>↓</button><button type="button" class="mini" data-m="del" aria-label="削除">×</button>
+      <div class="sedwhen"><input type="date" data-f="date" value="${s.sched?s.sched.date:''}" aria-label="日付"><input type="time" data-f="time" step="900" value="${s.sched?hmPad(s.sched.start):''}" aria-label="開始時刻"></div></div>`}).join('');
     const tot=draft.reduce((a,s)=>a+s.dur,0),dn=draft.filter(s=>s.done).length;
     $('#stepSum').textContent=draft.length?`${draft.length}ステップ・合計 ${durLabel(tot)}・完了 ${dn}/${draft.length}　※ステップは左のカードから個別にカレンダーへドラッグできます`:'大きなタスクは、30分〜1時間で終わる単位に分けると動きやすくなります';
   };
   ed.addEventListener('input',e=>{
     const row=e.target.closest('.sedrow');if(!row)return;const s=draft[+row.dataset.k],fl=e.target.dataset.f;
     if(fl==='title')s.title=e.target.value;else if(fl==='dur')s.dur=Number(e.target.value);else if(fl==='done')s.done=e.target.checked;
+    else if(fl==='date'||fl==='time'){
+      const dv=row.querySelector('[data-f=date]').value,tv=row.querySelector('[data-f=time]').value;
+      if(!dv){s.sched=null;return}
+      let st=9*60;if(tv){const [h,m]=tv.split(':').map(Number);st=h*60+m}
+      s.sched={date:dv,start:Math.max(H0*60,Math.min(st,H1*60-15))};
+      if(!tv)row.querySelector('[data-f=time]').value=hmPad(st);
+      return;
+    }
     if(fl!=='title')renderEd();
   });
   ed.addEventListener('click',e=>{
