@@ -118,6 +118,20 @@ main{flex:1;display:grid;grid-template-columns:minmax(330px,410px) 1fr;min-heigh
 .linkbtn{border:0;background:none;color:var(--muted);text-decoration:underline;font-size:12px;padding:0;margin-left:auto}
 .mnote{font-size:11.5px;color:var(--muted);margin:6px 2px}
 body.v-memo .adder,body.v-memo #filterSeg,body.v-memo #groupSel,body.v-memo .toolbar label{display:none!important}
+#left{border-right:0!important;border-bottom:0!important}
+#splitter{position:relative;background:var(--bg);cursor:col-resize;touch-action:none;z-index:6;display:flex;align-items:center;justify-content:center;border-left:1px solid var(--line);border-right:1px solid var(--line)}
+#splitter span{width:4px;height:36px;border-radius:3px;background:#CFC6B6;transition:background .15s}
+#splitter:hover span,#splitter:focus-visible span,body.splitting #splitter span{background:var(--ink)}
+#splitter:focus{outline:none}
+#splitter.h{cursor:row-resize;border:0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+#splitter.h span{width:40px;height:4px}
+#splitter::before{content:"";position:absolute;inset:0 -6px}
+#splitter.h::before{inset:-6px 0}
+body.splitting,body.splitting *{cursor:col-resize!important;user-select:none!important}
+body.splitting.sh,body.splitting.sh *{cursor:row-resize!important}
+body.m-list #splitter,body.m-cal #splitter{display:none}
+#left>.adder,#left>.toolbar{flex:none}
+#left{overflow:hidden}
 .stepsum{font-size:11.5px;color:var(--muted);margin-top:2px}
 .cbody{flex:1;min-width:0}
 .ctitle{font-weight:500;word-break:break-word}
@@ -272,6 +286,7 @@ body.resizing,body.resizing *{cursor:ns-resize!important}
   .calbar{padding:6px 10px;gap:4px}
   .calbar .btn{padding:5px 10px}
   #rangeLabel{font-size:13px;margin-left:4px}
+  .swl{display:none}
   .dh{padding:4px 1px 5px;font-size:11px}
   .dh b{font-size:15px}
   .dh.today b{width:26px;height:26px;line-height:26px}
@@ -298,6 +313,7 @@ body.resizing,body.resizing *{cursor:ns-resize!important}
   <h1>やりたい・やることボード<small>書き出す → 分類する → 優先順位 → カレンダーへ</small></h1>
   <div class="status" id="status"><i></i><span>この端末に保存</span></div>
   <button class="btn" id="btnCats">カテゴリ</button>
+  <button class="btn" id="btnSwap" title="リストとカレンダーの位置を入れ替え" aria-label="リストとカレンダーの位置を入れ替え">⇄<span class="swl"> 入れ替え</span></button>
   <button class="btn" id="btnHelp">使い方</button>
 </header>
 <div class="mseg"><div class="seg" id="mSeg"><button data-m="split" class="on">リスト＋カレンダー</button><button data-m="list">リスト</button><button data-m="cal">カレンダー</button></div></div>
@@ -323,6 +339,7 @@ body.resizing,body.resizing *{cursor:ns-resize!important}
     <div id="leftBody" data-drop="unsched"></div>
     <div class="unsched-hint">左側に戻すと予定から外れます</div>
   </section>
+  <div id="splitter" role="separator" tabindex="0" aria-label="リストとカレンダーの境目（ドラッグで広さを変更、ダブルクリックで元に戻す）" title="ドラッグで広さを変更／ダブルクリックで元に戻す"><span></span></div>
   <section id="right">
     <div class="calbar">
       <button class="btn icon" id="calPrev" aria-label="前へ">‹</button>
@@ -819,7 +836,57 @@ function segBind(sel,attr,fn){
     fn(b.dataset[attr]);
   });
 }
-function setMode(m){document.body.classList.remove('m-split','m-list','m-cal');document.body.classList.add('m-'+m);
+/* ---------- adjustable layout ---------- */
+const LKEY=KEY+'-layout';
+let layout={lw:380,th:.48,swap:false};
+try{const l=JSON.parse(localStorage.getItem(LKEY)||'null');if(l)layout={...layout,...l}}catch(e){}
+const mqStack=window.matchMedia('(max-width:860px)'),mqPhone=window.matchMedia('(max-width:700px)');
+function saveLayout(){try{localStorage.setItem(LKEY,JSON.stringify(layout))}catch(e){}}
+function applyLayout(){
+  const main=$('main'),sp=$('#splitter'),L=$('#left'),R=$('#right');
+  L.style.order=layout.swap?3:1;R.style.order=layout.swap?1:3;sp.style.order=2;
+  const W=main.clientWidth;
+  if(!mqStack.matches){
+    layout.lw=Math.round(Math.max(260,Math.min(layout.lw,Math.max(260,W-340))));
+    sp.classList.remove('h');document.body.classList.remove('sh');
+    main.style.gridTemplateRows='minmax(0,1fr)';
+    main.style.gridTemplateColumns=layout.swap?`minmax(0,1fr) 8px ${layout.lw}px`:`${layout.lw}px 8px minmax(0,1fr)`;
+  }else{
+    sp.classList.add('h');document.body.classList.add('sh');
+    main.style.gridTemplateColumns='minmax(0,1fr)';
+    const single=mqPhone.matches&&(document.body.classList.contains('m-list')||document.body.classList.contains('m-cal'));
+    if(single){main.style.gridTemplateRows='minmax(0,1fr)';return}
+    const H=main.clientHeight||600,minL=Math.min(.6,230/H),minC=Math.min(.6,170/H);
+    layout.th=Math.max(minL,Math.min(layout.th,1-minC));
+    const a=layout.th,b=1-layout.th;
+    main.style.gridTemplateRows=layout.swap?`minmax(0,${b}fr) 12px minmax(0,${a}fr)`:`minmax(0,${a}fr) 12px minmax(0,${b}fr)`;
+  }
+}
+(function(){
+  const sp=$('#splitter');let on=false;
+  sp.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();on=true;try{sp.setPointerCapture(e.pointerId)}catch(_){}document.body.classList.add('splitting')});
+  sp.addEventListener('pointermove',e=>{
+    if(!on)return;
+    const r=$('main').getBoundingClientRect();
+    if(!mqStack.matches){layout.lw=layout.swap?r.right-e.clientX-4:e.clientX-r.left-4}
+    else{const y=(e.clientY-r.top)/r.height;layout.th=layout.swap?1-y:y}
+    applyLayout();
+  });
+  const end=()=>{if(!on)return;on=false;document.body.classList.remove('splitting');saveLayout()};
+  sp.addEventListener('pointerup',end);sp.addEventListener('pointercancel',end);
+  sp.addEventListener('dblclick',()=>{layout.lw=380;layout.th=.48;applyLayout();saveLayout();toast('広さを元に戻しました')});
+  sp.addEventListener('keydown',e=>{
+    const st=mqStack.matches,k=e.key;let d=0;
+    if(!st&&(k==='ArrowLeft'||k==='ArrowRight'))d=(k==='ArrowRight'?1:-1)*(layout.swap?-1:1);
+    if(st&&(k==='ArrowUp'||k==='ArrowDown'))d=(k==='ArrowDown'?1:-1)*(layout.swap?-1:1);
+    if(!d)return;e.preventDefault();
+    if(st)layout.th+=d*.04;else layout.lw+=d*24;applyLayout();saveLayout();
+  });
+  $('#btnSwap').addEventListener('click',()=>{layout.swap=!layout.swap;applyLayout();saveLayout()});
+  mqStack.addEventListener&&mqStack.addEventListener('change',applyLayout);
+  window.addEventListener('resize',applyLayout);
+})();
+function setMode(m){document.body.classList.remove('m-split','m-list','m-cal');document.body.classList.add('m-'+m);if(typeof applyLayout==='function')applyLayout();
   document.querySelectorAll('#mSeg button').forEach(x=>x.classList.toggle('on',x.dataset.m===m));
   try{localStorage.setItem(KEY+'-mode',m)}catch(e){}}
 segBind('#mSeg','m',m=>{setMode(m);if(m!=='list')renderCal()});
@@ -1023,6 +1090,7 @@ function openHelp(){
     <p><b>3.5 ステップに分ける</b>　カードの「＋ ステップに分ける」から、小さな行動に分解します。「調べる → 決める → 予約する」のように → でつなぐと一度に追加できます。各ステップは単体でカレンダーにドラッグでき、全部チェックすると元の項目も完了になります。</p>
     <p>やりたいことの多くは <b>B（重要だけど緊急でない）</b> に入ります。ここを先にカレンダーへ確保するのがコツです。</p>
     <p><b>4. カレンダーへ</b>　カードを右のカレンダーにドラッグ（スマホは長押ししてから）。予定の下端をドラッグで時間を伸縮、左側に戻すと予定から外れます。</p>
+    <p><b>画面の配置</b>　リストとカレンダーの境目をドラッグすると広さを変えられます（ダブルクリックで元に戻ります）。右上の「⇄」で左右（スマホでは上下）を入れ替えられます。配置は次に開いたときも保たれます。</p>
     <p><b>TODOメモ</b>　「TODOメモ」タブは、分類や優先度をつけない用事をさっと書いてチェックする場所です。「→」でボードの「やること」に移せます。</p>
     <p><b>5. Googleカレンダーへ</b>　予定の編集画面の「Googleカレンダーに追加」（ステップは「31」ボタン）を押すと、内容入力済みの登録画面が開きます。そこで「保存」を押せば登録完了です。あとで日時を変えた場合は、Googleカレンダー側も手動で直してください。</p>
     <div class="mfoot"><span style="flex:1"></span><button class="btn primary" id="helpClose">閉じる</button></div></div>`);
@@ -1052,7 +1120,7 @@ function addSamples(){
 
 /* ---------- boot ---------- */
 const local=loadLocal();if(local)state=local;
-fillCatSelect();renderAll();scrollToHour(8);
+fillCatSelect();applyLayout();renderAll();scrollToHour(8);
 initRemote();
 })();
 </script>
